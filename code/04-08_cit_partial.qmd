@@ -320,7 +320,11 @@ cit_grid_result <- tune_sim_anneal(
   param_info = cit_param,
   iter = 50
 )
-  
+
+#install.packages("beepr")
+library(beepr)
+beepr::beep()  
+
 cit_grid_result
 
 cit_grid_result$.metrics[[2]]
@@ -374,7 +378,8 @@ cit_grid_result %>%
 ```{r}
 # Based on lowest RMSE
 best_rmse <- cit_grid_result %>% 
-  select_best(metric = "rmse")
+  select_by_one_std_err("tree_depth",
+                        metric = "rmse")
 
 best_rmse
 
@@ -383,11 +388,19 @@ best_rmse
 ```{r}
 # Based on greatest R2
 best_r2 <- cit_grid_result %>% 
-  select_best(metric = "rsq")
+  select_by_one_std_err("tree_depth",
+                        metric = "rsq")
 
 best_r2
 
 ```
+#From my analysis
+##Based on RMSE, we would choose
+tree_depth = 9 and conditional_min_criterion = 0.999954
+
+##Based on R2, we would choose
+tree_depth = 9 and conditional_min_criterion = 0.999954
+
 Based on RMSE, we would choose   
   - tree_depth = 10   
   - conditional_min_criterion = 0.9926512
@@ -461,6 +474,9 @@ final_spec %>%
 ```
 How does metrics on test compare to metrics on train?  
 
+rmse is lower in train set and higher in test set.
+rsq is higher in train set and lower in test set.
+
 Predicted vs. observed plot:  
 ```{r}
 final_fit %>%
@@ -473,7 +489,9 @@ final_fit %>%
   scale_x_continuous(limits = c(20, 40)) +
   scale_y_continuous(limits = c(20, 40)) 
 ```
-Why the 4 horizontal lines?  
+Why the 4 horizontal lines?  fitting the model to the training set only and then uses the model to do predictions on the test set
+
+we didnt see these parallel lines (horizontal lines) in the elasticnet model. 
 
 How can we get more horizontal lines in this type of algorithm?  
 
@@ -494,16 +512,53 @@ final_spec %>%
   labs(y = NULL)
     
 ```
+only mean_srad.wm2_jul (solar radiation) and mean_vp.pa_jun (vapor pressure) entered the model
+
+```{r}
+final_spec %>%
+  fit(strength_gtex ~ .,
+         data = bake(weather_prep, weather_train)) %>%
+    vi() %>%
+  mutate(
+    Variable = fct_reorder(Variable, 
+                           Importance)
+  ) %>%
+  ggplot(aes(x = Importance, 
+             y = Variable)) +
+  geom_col() +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(y = NULL)
+    
+```
+
+mean_vp.pa_May (vapor pressure), mean_srad.wm2_Aug (solar radiation) and mean_dayl.s_Sep (daylength) entered the model
+
 Tree:  
 
 ```{r}
-
+final_spec %>% 
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, weather)
+      ) %>% 
+  .$fit %>% 
+  plot()
   
 ```
 
 **Therefore, solar radiation in July and vapor pressure in June were the most important variables affecting cotton fiber strength.**  
 
-Greater fiber strength was observed when solar radiation in July was < 398 W/m2 and vapor pressure in June was > 2130 Pa (terminal node 4).    
+Greater fiber strength was observed when solar radiation in July was < 398 W/m2 and vapor pressure in June was > 2130 Pa (terminal node 4). 
+
+Tree:
+```{r}
+final_spec %>% 
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, weather_train)
+      ) %>% 
+  .$fit %>% 
+  plot()
+  
+```
 
 For a nicer tree visualization, check out the package **ggparty**:  
 
